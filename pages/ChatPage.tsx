@@ -1,37 +1,41 @@
 import React, { useState, useEffect, useRef } from 'react';
 import apiClient from '../api/client';
-import { Conversation, Message } from '../types';
+import { Conversation, Message, ConversationsResponse, MessagesResponse } from '../types';
 import { useAuth } from '../context/AuthContext';
-import { Send, Bot, User, Search, Instagram, MessageCircle, MoreVertical } from 'lucide-react';
+import { Send, Bot, User, Search, Instagram, MessageCircle, MoreVertical, Loader } from 'lucide-react';
 
 const ChatPage = () => {
-  const { user } = useAuth();
+  const { businessId } = useAuth();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [loadingMessages, setLoadingMessages] = useState(false);
+  const [loadingConversations, setLoadingConversations] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [searchTerm, setSearchTerm] = useState('');
 
   // Poll conversations list
   useEffect(() => {
     const fetchConversations = async () => {
-      if (!user?.business_id) return;
+      if (!businessId) return;
+
       try {
-        const { data } = await apiClient.get<Conversation[]>(`/chat/conversations`, {
-          params: { business_id: user.business_id }
+        const { data } = await apiClient.get<ConversationsResponse>('/chat/conversations', {
+          params: { business_id: businessId }
         });
-        setConversations(data);
+        setConversations(data.conversations || []);
       } catch (error) {
-        console.error("Error fetching conversations", error);
+        console.error('Error fetching conversations', error);
+      } finally {
+        setLoadingConversations(false);
       }
     };
 
     fetchConversations();
     const interval = setInterval(fetchConversations, 5000);
     return () => clearInterval(interval);
-  }, [user]);
+  }, [businessId]);
 
   // Poll messages for selected conversation
   useEffect(() => {
@@ -39,12 +43,11 @@ const ChatPage = () => {
 
     const fetchHistory = async () => {
       try {
-        const { data } = await apiClient.get<Message[]>(`/chat/history/${selectedConversation.id}`);
-        // Only update if length changed to avoid jitter, or improve diffing logic
-        setMessages(data);
+        const { data } = await apiClient.get<MessagesResponse>(`/chat/history/${selectedConversation.id}`);
+        setMessages(data.messages || []);
         if (loadingMessages) setLoadingMessages(false);
       } catch (error) {
-        console.error("Error fetching history", error);
+        console.error('Error fetching history', error);
       }
     };
 
@@ -56,7 +59,7 @@ const ChatPage = () => {
 
   // Scroll to bottom
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
   const handleSendMessage = async (e: React.FormEvent) => {
@@ -66,173 +69,336 @@ const ChatPage = () => {
     try {
       await apiClient.post('/chat/send-message', {
         conversation_id: selectedConversation.id,
-        content: newMessage,
+        text: newMessage,
       });
       setNewMessage('');
-      // Optimistic update could happen here
     } catch (error) {
-      console.error("Failed to send message", error);
+      console.error('Failed to send message', error);
+      alert('Failed to send message. Please try again.');
     }
   };
 
   const toggleAI = async () => {
     if (!selectedConversation) return;
+
     try {
-      const { data } = await apiClient.patch(`/chat/toggle-ai`, {
+      const { data } = await apiClient.patch('/chat/toggle-ai', {
         conversation_id: selectedConversation.id,
-        active: !selectedConversation.is_ai_active
+        ai_enabled: !selectedConversation.ai_enabled
       });
-      // Update local state
-      setSelectedConversation({ ...selectedConversation, is_ai_active: data.is_ai_active });
-      setConversations(conversations.map(c => 
-        c.id === selectedConversation.id ? { ...c, is_ai_active: data.is_ai_active } : c
+
+      setSelectedConversation({ ...selectedConversation, ai_enabled: data.ai_enabled });
+      setConversations(conversations.map(c =>
+        c.id === selectedConversation.id ? { ...c, ai_enabled: data.ai_enabled } : c
       ));
     } catch (error) {
-      console.error("Failed to toggle AI", error);
+      console.error('Failed to toggle AI', error);
     }
   };
 
-  const filteredConversations = conversations.filter(c => 
-    c.customer_name.toLowerCase().includes(searchTerm.toLowerCase())
+  const filteredConversations = conversations.filter(c =>
+    (c.client_name || '').toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  if (!businessId) {
+    return (
+      <div className="card" style={{ textAlign: 'center', padding: '3rem' }}>
+        <p style={{ color: 'var(--color-text-secondary)' }}>
+          No business assigned to your account. Please contact admin.
+        </p>
+      </div>
+    );
+  }
+
   return (
-    <div className="flex h-[calc(100vh-6rem)] bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+    <div className="card" style={{ height: 'calc(100vh - 8rem)', display: 'flex', padding: 0, overflow: 'hidden' }}>
       {/* Sidebar: Conversation List */}
-      <div className="w-1/3 border-r border-gray-200 flex flex-col">
-        <div className="p-4 border-b border-gray-200">
-          <div className="relative">
-            <Search className="absolute left-3 top-2.5 text-gray-400" size={18} />
+      <div style={{
+        width: '360px',
+        borderRight: '1px solid var(--color-border)',
+        display: 'flex',
+        flexDirection: 'column'
+      }}>
+        <div style={{
+          padding: '1rem',
+          borderBottom: '1px solid var(--color-border)'
+        }}>
+          <div style={{ position: 'relative' }}>
+            <Search
+              size={18}
+              style={{
+                position: 'absolute',
+                left: '0.75rem',
+                top: '50%',
+                transform: 'translateY(-50%)',
+                color: 'var(--color-text-tertiary)'
+              }}
+            />
             <input
               type="text"
               placeholder="Search conversations..."
-              className="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+              className="form-input"
+              style={{ paddingLeft: '2.5rem' }}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
         </div>
-        
-        <div className="flex-1 overflow-y-auto">
-          {filteredConversations.map((conv) => (
-            <div
-              key={conv.id}
-              onClick={() => setSelectedConversation(conv)}
-              className={`p-4 border-b border-gray-100 cursor-pointer hover:bg-gray-50 transition-colors ${
-                selectedConversation?.id === conv.id ? 'bg-indigo-50 border-l-4 border-l-primary' : ''
-              }`}
-            >
-              <div className="flex justify-between items-start mb-1">
-                <div className="flex items-center space-x-2">
-                  <span className="font-semibold text-gray-900 truncate max-w-[150px]">
-                    {conv.customer_name}
-                  </span>
-                  {conv.platform === 'telegram' ? (
-                    <MessageCircle size={14} className="text-blue-500" />
-                  ) : (
-                    <Instagram size={14} className="text-pink-600" />
+
+        <div style={{ flex: 1, overflowY: 'auto' }}>
+          {loadingConversations ? (
+            <div style={{ padding: '2rem', textAlign: 'center' }}>
+              <div className="loading-spinner" style={{ margin: '0 auto' }} />
+              <p style={{ marginTop: '1rem', color: 'var(--color-text-tertiary)', fontSize: '0.875rem' }}>
+                Loading conversations...
+              </p>
+            </div>
+          ) : filteredConversations.length > 0 ? (
+            filteredConversations.map((conv) => (
+              <div
+                key={conv.id}
+                onClick={() => setSelectedConversation(conv)}
+                style={{
+                  padding: '1rem',
+                  borderBottom: '1px solid var(--color-border-light)',
+                  cursor: 'pointer',
+                  backgroundColor: selectedConversation?.id === conv.id ? 'var(--color-active)' : 'transparent',
+                  borderLeft: selectedConversation?.id === conv.id ? '3px solid var(--color-primary)' : '3px solid transparent',
+                  transition: 'all 0.2s'
+                }}
+                onMouseEnter={(e: any) => {
+                  if (selectedConversation?.id !== conv.id) {
+                    e.currentTarget.style.backgroundColor = 'var(--color-hover)';
+                  }
+                }}
+                onMouseLeave={(e: any) => {
+                  if (selectedConversation?.id !== conv.id) {
+                    e.currentTarget.style.backgroundColor = 'transparent';
+                  }
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '0.5rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flex: 1 }}>
+                    <span style={{
+                      fontWeight: 600,
+                      color: 'var(--color-text-primary)',
+                      fontSize: '0.875rem',
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      maxWidth: '200px'
+                    }}>
+                      {conv.client_name || 'Unknown User'}
+                    </span>
+                    {conv.channel === 'telegram' ? (
+                      <MessageCircle size={14} style={{ color: '#0088cc', flexShrink: 0 }} />
+                    ) : (
+                      <Instagram size={14} style={{ color: '#E4405F', flexShrink: 0 }} />
+                    )}
+                  </div>
+                  {conv.last_message && (
+                    <span style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)', flexShrink: 0 }}>
+                      {new Date(conv.last_message.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </span>
                   )}
                 </div>
-                <span className="text-xs text-gray-400">
-                  {new Date(conv.updated_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                </span>
+
+                {conv.last_message && (
+                  <p style={{
+                    fontSize: '0.8125rem',
+                    color: 'var(--color-text-secondary)',
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    marginBottom: '0.5rem'
+                  }}>
+                    {conv.last_message.text}
+                  </p>
+                )}
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  {conv.ai_enabled ? (
+                    <span className="badge badge-primary">AI Active</span>
+                  ) : (
+                    <span className="badge" style={{ backgroundColor: 'var(--color-bg-tertiary)', color: 'var(--color-text-secondary)' }}>
+                      Manual Mode
+                    </span>
+                  )}
+                </div>
               </div>
-              <p className="text-sm text-gray-500 truncate">{conv.last_message}</p>
-              <div className="mt-2 flex items-center space-x-2">
-                 {conv.is_ai_active && (
-                   <span className="px-2 py-0.5 bg-blue-100 text-blue-700 text-xs rounded-full font-medium">AI Active</span>
-                 )}
-                 {conv.unread_count > 0 && (
-                   <span className="px-2 py-0.5 bg-red-100 text-red-700 text-xs rounded-full font-bold ml-auto">
-                     {conv.unread_count}
-                   </span>
-                 )}
-              </div>
+            ))
+          ) : (
+            <div style={{ padding: '2rem', textAlign: 'center' }}>
+              <MessageCircle size={48} style={{ color: 'var(--color-text-tertiary)', margin: '0 auto 1rem' }} />
+              <p style={{ color: 'var(--color-text-secondary)' }}>
+                {searchTerm ? 'No conversations found' : 'No conversations yet'}
+              </p>
             </div>
-          ))}
+          )}
         </div>
       </div>
 
       {/* Main Panel: Messages */}
       {selectedConversation ? (
-        <div className="flex-1 flex flex-col">
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
           {/* Header */}
-          <div className="h-16 border-b border-gray-200 px-6 flex items-center justify-between bg-white">
+          <div style={{
+            height: '4rem',
+            borderBottom: '1px solid var(--color-border)',
+            padding: '0 1.5rem',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            backgroundColor: 'var(--color-bg-primary)'
+          }}>
             <div>
-              <h2 className="font-bold text-gray-900">{selectedConversation.customer_name}</h2>
-              <span className="text-xs text-gray-500 capitalize">{selectedConversation.platform}</span>
+              <h2 style={{
+                fontWeight: 600,
+                color: 'var(--color-text-primary)',
+                fontSize: '1rem',
+                marginBottom: '0.25rem'
+              }}>
+                {selectedConversation.client_name || 'Unknown User'}
+              </h2>
+              <span style={{
+                fontSize: '0.75rem',
+                color: 'var(--color-text-tertiary)',
+                textTransform: 'capitalize'
+              }}>
+                {selectedConversation.channel}
+              </span>
             </div>
-            <div className="flex items-center space-x-3">
-              <button 
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+              <button
                 onClick={toggleAI}
-                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                  selectedConversation.is_ai_active 
-                    ? 'bg-blue-100 text-blue-700 hover:bg-blue-200' 
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                }`}
+                className="btn"
+                style={{
+                  padding: '0.5rem 1rem',
+                  fontSize: '0.8125rem',
+                  backgroundColor: selectedConversation.ai_enabled ? 'var(--color-info-light)' : 'var(--color-bg-tertiary)',
+                  color: selectedConversation.ai_enabled ? 'var(--color-info)' : 'var(--color-text-secondary)'
+                }}
               >
-                {selectedConversation.is_ai_active ? 'AI Enabled' : 'AI Paused'}
+                {selectedConversation.ai_enabled ? 'AI Enabled' : 'AI Paused'}
               </button>
-              <button className="text-gray-400 hover:text-gray-600">
+              <button
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: 'var(--color-text-tertiary)',
+                  cursor: 'pointer',
+                  padding: '0.5rem'
+                }}
+              >
                 <MoreVertical size={20} />
               </button>
             </div>
           </div>
 
           {/* Messages */}
-          <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-gray-50">
-            {messages.map((msg) => (
-              <div 
-                key={msg.id} 
-                className={`flex ${msg.sender_type === 'client' ? 'justify-start' : 'justify-end'}`}
-              >
-                <div 
-                  className={`max-w-[70%] rounded-2xl p-4 shadow-sm ${
-                    msg.sender_type === 'client' 
-                      ? 'bg-white text-gray-900 rounded-tl-none' 
-                      : msg.sender_type === 'ai'
-                        ? 'bg-blue-50 text-blue-900 border border-blue-100 rounded-tr-none'
-                        : 'bg-indigo-600 text-white rounded-tr-none'
-                  }`}
+          <div style={{
+            flex: 1,
+            overflowY: 'auto',
+            padding: '1.5rem',
+            backgroundColor: 'var(--color-bg-secondary)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '1rem'
+          }}>
+            {loadingMessages && messages.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '2rem' }}>
+                <Loader size={32} style={{ color: 'var(--color-text-tertiary)', margin: '0 auto', animation: 'spin 1s linear infinite' }} />
+              </div>
+            ) : (
+              messages.map((msg) => (
+                <div
+                  key={msg.id}
+                  style={{
+                    display: 'flex',
+                    justifyContent: msg.sender_type === 'client' ? 'flex-start' : 'flex-end'
+                  }}
                 >
-                  <p className="text-sm">{msg.content}</p>
-                  <div className={`mt-1 text-xs flex items-center ${
-                    msg.sender_type === 'operator' ? 'text-indigo-200' : 'text-gray-400'
-                  }`}>
-                    {msg.sender_type === 'ai' && <Bot size={12} className="mr-1" />}
-                    {msg.sender_type === 'operator' && <User size={12} className="mr-1" />}
-                    <span>{new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                  <div
+                    style={{
+                      maxWidth: '70%',
+                      padding: '0.75rem 1rem',
+                      borderRadius: '1rem',
+                      backgroundColor:
+                        msg.sender_type === 'client'
+                          ? 'var(--color-card)'
+                          : msg.sender_type === 'ai'
+                          ? 'var(--color-info-light)'
+                          : 'var(--color-primary)',
+                      color:
+                        msg.sender_type === 'operator'
+                          ? 'white'
+                          : 'var(--color-text-primary)',
+                      boxShadow: 'var(--shadow-sm)',
+                      border: msg.sender_type === 'client' ? '1px solid var(--color-border)' : 'none'
+                    }}
+                  >
+                    <p style={{ fontSize: '0.875rem', marginBottom: '0.5rem', lineHeight: 1.5 }}>
+                      {msg.text}
+                    </p>
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.25rem',
+                      fontSize: '0.75rem',
+                      color: msg.sender_type === 'operator' ? 'rgba(255,255,255,0.8)' : 'var(--color-text-tertiary)'
+                    }}>
+                      {msg.sender_type === 'ai' && <Bot size={12} />}
+                      {msg.sender_type === 'operator' && <User size={12} />}
+                      <span>
+                        {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              ))
+            )}
             <div ref={messagesEndRef} />
           </div>
 
           {/* Input */}
-          <div className="p-4 border-t border-gray-200 bg-white">
-            <form onSubmit={handleSendMessage} className="flex space-x-3">
+          <div style={{
+            padding: '1rem 1.5rem',
+            borderTop: '1px solid var(--color-border)',
+            backgroundColor: 'var(--color-bg-primary)'
+          }}>
+            <form onSubmit={handleSendMessage} style={{ display: 'flex', gap: '0.75rem' }}>
               <input
                 type="text"
-                className="flex-1 px-4 py-2.5 bg-gray-100 border-transparent focus:bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary/50 focus:border-transparent outline-none transition-all"
+                className="form-input"
                 placeholder="Type your message..."
                 value={newMessage}
                 onChange={(e) => setNewMessage(e.target.value)}
+                style={{ flex: 1 }}
               />
-              <button 
-                type="submit" 
+              <button
+                type="submit"
                 disabled={!newMessage.trim()}
-                className="p-3 bg-primary text-white rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="btn btn-primary"
+                style={{ padding: '0.625rem 1.25rem' }}
               >
-                <Send size={20} />
+                <Send size={18} />
               </button>
             </form>
           </div>
         </div>
       ) : (
-        <div className="flex-1 flex flex-col items-center justify-center text-gray-400 bg-gray-50">
-          <MessageCircle size={48} className="mb-4 text-gray-300" />
-          <p>Select a conversation to start chatting</p>
+        <div style={{
+          flex: 1,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          color: 'var(--color-text-tertiary)',
+          backgroundColor: 'var(--color-bg-secondary)'
+        }}>
+          <MessageCircle size={64} style={{ marginBottom: '1rem', opacity: 0.5 }} />
+          <p style={{ fontSize: '1.125rem' }}>Select a conversation to start chatting</p>
         </div>
       )}
     </div>

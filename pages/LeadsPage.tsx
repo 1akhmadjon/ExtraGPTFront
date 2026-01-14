@@ -1,148 +1,324 @@
 import React, { useState, useEffect } from 'react';
 import apiClient from '../api/client';
 import { useAuth } from '../context/AuthContext';
-import { Lead } from '../types';
-import { Filter, Phone, MessageSquare, ChevronDown } from 'lucide-react';
+import { Lead, LeadStats, LeadsResponse, LeadStatus } from '../types';
+import { Phone, MessageSquare, Instagram, TrendingUp, UserCheck, Users as UsersIcon, CheckCircle, XCircle } from 'lucide-react';
 
-const STATUS_COLORS = {
-  new: 'bg-blue-100 text-blue-800',
-  contacted: 'bg-yellow-100 text-yellow-800',
-  meeting: 'bg-purple-100 text-purple-800',
-  closed: 'bg-green-100 text-green-800',
-  lost: 'bg-red-100 text-red-800',
-};
+const STATUS_OPTIONS: { value: LeadStatus; label: string; color: string }[] = [
+  { value: 'need_to_call', label: 'Need to Call', color: 'var(--color-danger)' },
+  { value: 'contacted', label: 'Contacted', color: 'var(--color-info)' },
+  { value: 'continuing', label: 'Continuing', color: 'var(--color-warning)' },
+  { value: 'finished', label: 'Finished', color: 'var(--color-success)' },
+  { value: 'rejected', label: 'Rejected', color: 'var(--color-text-tertiary)' },
+];
 
 const LeadsPage = () => {
-  const { user } = useAuth();
+  const { businessId } = useAuth();
   const [leads, setLeads] = useState<Lead[]>([]);
-  const [filter, setFilter] = useState('all');
+  const [stats, setStats] = useState<LeadStats>({
+    need_to_call: 0,
+    contacted: 0,
+    continuing: 0,
+    finished: 0,
+    rejected: 0,
+  });
+  const [filter, setFilter] = useState<LeadStatus | 'all'>('all');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const fetchLeads = async () => {
-      if (!user?.business_id) return;
-      try {
-        const { data } = await apiClient.get<Lead[]>('/leads', {
-          params: { business_id: user.business_id }
-        });
-        setLeads(data);
-        setLoading(false);
-      } catch (error) {
-        console.error("Failed to fetch leads", error);
-        setLoading(false);
-      }
-    };
     fetchLeads();
-  }, [user]);
+  }, [businessId, filter]);
 
-  const updateStatus = async (id: number, newStatus: string) => {
+  const fetchLeads = async () => {
+    if (!businessId) return;
+
     try {
-      await apiClient.patch(`/leads/${id}/status`, { status: newStatus });
-      setLeads(leads.map(lead => 
-        lead.id === id ? { ...lead, status: newStatus as any } : lead
-      ));
+      const params: any = { business_id: businessId };
+      if (filter !== 'all') {
+        params.status = filter;
+      }
+
+      const { data } = await apiClient.get<LeadsResponse>('/leads', { params });
+      setLeads(data.leads || []);
+      setStats(data.stats || {
+        need_to_call: 0,
+        contacted: 0,
+        continuing: 0,
+        finished: 0,
+        rejected: 0,
+      });
     } catch (error) {
-      console.error("Failed to update status", error);
+      console.error('Failed to fetch leads', error);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const filteredLeads = filter === 'all' 
-    ? leads 
-    : leads.filter(l => l.status === filter);
+  const updateStatus = async (leadId: number, newStatus: LeadStatus) => {
+    try {
+      await apiClient.patch(`/leads/${leadId}/status`, { status: newStatus });
+      await fetchLeads();
+    } catch (error) {
+      console.error('Failed to update status', error);
+      alert('Failed to update lead status');
+    }
+  };
+
+  const getStatusColor = (status: LeadStatus) => {
+    const statusOption = STATUS_OPTIONS.find(s => s.value === status);
+    return statusOption?.color || 'var(--color-text-secondary)';
+  };
+
+  const getStatusLabel = (status: LeadStatus) => {
+    const statusOption = STATUS_OPTIONS.find(s => s.value === status);
+    return statusOption?.label || status;
+  };
+
+  if (!businessId) {
+    return (
+      <div className="card" style={{ textAlign: 'center', padding: '3rem' }}>
+        <p style={{ color: 'var(--color-text-secondary)' }}>
+          No business assigned to your account. Please contact admin.
+        </p>
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Leads Management</h1>
-          <p className="text-gray-500">Track and manage your potential customers</p>
+    <div>
+      {/* Page Header */}
+      <div style={{ marginBottom: '2rem' }}>
+        <h1 style={{ fontSize: '1.875rem', fontWeight: 700, marginBottom: '0.5rem' }}>
+          Leads Management
+        </h1>
+        <p style={{ color: 'var(--color-text-secondary)' }}>
+          Track and manage your potential customers
+        </p>
+      </div>
+
+      {/* Statistics Cards */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+        gap: '1rem',
+        marginBottom: '2rem'
+      }}>
+        <div className="card" style={{
+          padding: '1.25rem',
+          borderLeft: '4px solid var(--color-danger)'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div>
+              <p style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)', marginBottom: '0.5rem' }}>
+                Need to Call
+              </p>
+              <p style={{ fontSize: '2rem', fontWeight: 700, color: 'var(--color-text-primary)' }}>
+                {stats.need_to_call}
+              </p>
+            </div>
+            <Phone size={32} style={{ color: 'var(--color-danger)', opacity: 0.3 }} />
+          </div>
         </div>
-        <div className="flex items-center space-x-2 bg-white p-1 rounded-lg border border-gray-200 shadow-sm">
-          {['all', 'new', 'contacted', 'meeting', 'closed', 'lost'].map((status) => (
-            <button
-              key={status}
-              onClick={() => setFilter(status)}
-              className={`px-4 py-2 rounded-md text-sm font-medium capitalize transition-all ${
-                filter === status 
-                  ? 'bg-primary text-white shadow-sm' 
-                  : 'text-gray-600 hover:bg-gray-50'
-              }`}
-            >
-              {status}
-            </button>
-          ))}
+
+        <div className="card" style={{
+          padding: '1.25rem',
+          borderLeft: '4px solid var(--color-info)'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div>
+              <p style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)', marginBottom: '0.5rem' }}>
+                Contacted
+              </p>
+              <p style={{ fontSize: '2rem', fontWeight: 700, color: 'var(--color-text-primary)' }}>
+                {stats.contacted}
+              </p>
+            </div>
+            <UserCheck size={32} style={{ color: 'var(--color-info)', opacity: 0.3 }} />
+          </div>
+        </div>
+
+        <div className="card" style={{
+          padding: '1.25rem',
+          borderLeft: '4px solid var(--color-warning)'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div>
+              <p style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)', marginBottom: '0.5rem' }}>
+                Continuing
+              </p>
+              <p style={{ fontSize: '2rem', fontWeight: 700, color: 'var(--color-text-primary)' }}>
+                {stats.continuing}
+              </p>
+            </div>
+            <TrendingUp size={32} style={{ color: 'var(--color-warning)', opacity: 0.3 }} />
+          </div>
+        </div>
+
+        <div className="card" style={{
+          padding: '1.25rem',
+          borderLeft: '4px solid var(--color-success)'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div>
+              <p style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)', marginBottom: '0.5rem' }}>
+                Finished
+              </p>
+              <p style={{ fontSize: '2rem', fontWeight: 700, color: 'var(--color-text-primary)' }}>
+                {stats.finished}
+              </p>
+            </div>
+            <CheckCircle size={32} style={{ color: 'var(--color-success)', opacity: 0.3 }} />
+          </div>
+        </div>
+
+        <div className="card" style={{
+          padding: '1.25rem',
+          borderLeft: '4px solid var(--color-text-tertiary)'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div>
+              <p style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)', marginBottom: '0.5rem' }}>
+                Rejected
+              </p>
+              <p style={{ fontSize: '2rem', fontWeight: 700, color: 'var(--color-text-primary)' }}>
+                {stats.rejected}
+              </p>
+            </div>
+            <XCircle size={32} style={{ color: 'var(--color-text-tertiary)', opacity: 0.3 }} />
+          </div>
         </div>
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+      {/* Filters */}
+      <div style={{
+        display: 'flex',
+        gap: '0.5rem',
+        marginBottom: '1.5rem',
+        flexWrap: 'wrap'
+      }}>
+        <button
+          onClick={() => setFilter('all')}
+          className="btn"
+          style={{
+            padding: '0.5rem 1rem',
+            fontSize: '0.875rem',
+            backgroundColor: filter === 'all' ? 'var(--color-primary)' : 'var(--color-bg-tertiary)',
+            color: filter === 'all' ? 'white' : 'var(--color-text-primary)'
+          }}
+        >
+          All Leads
+        </button>
+        {STATUS_OPTIONS.map(status => (
+          <button
+            key={status.value}
+            onClick={() => setFilter(status.value)}
+            className="btn"
+            style={{
+              padding: '0.5rem 1rem',
+              fontSize: '0.875rem',
+              backgroundColor: filter === status.value ? status.color : 'var(--color-bg-tertiary)',
+              color: filter === status.value ? 'white' : 'var(--color-text-primary)'
+            }}
+          >
+            {status.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Leads Table */}
+      <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
         {loading ? (
-           <div className="p-12 text-center text-gray-500">Loading leads...</div>
+          <div style={{ padding: '3rem', textAlign: 'center' }}>
+            <div className="loading-spinner" style={{ margin: '0 auto' }} />
+            <p style={{ marginTop: '1rem', color: 'var(--color-text-tertiary)' }}>
+              Loading leads...
+            </p>
+          </div>
         ) : (
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Contact</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Topic</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created</th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {filteredLeads.map((lead) => (
-                <tr key={lead.id} className="hover:bg-gray-50 transition-colors">
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="font-medium text-gray-900">{lead.name}</div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex flex-col space-y-1">
-                      <div className="flex items-center text-sm text-gray-600">
-                        <Phone size={14} className="mr-2" />
-                        {lead.phone}
-                      </div>
-                      <div className="flex items-center text-sm text-gray-500">
-                        <MessageSquare size={14} className="mr-2" />
-                        <span className="capitalize">{lead.channel}</span>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="text-sm text-gray-900 line-clamp-2">{lead.topic}</div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="relative inline-block text-left">
-                      <select
-                        value={lead.status}
-                        onChange={(e) => updateStatus(lead.id, e.target.value)}
-                        className={`block w-full pl-3 pr-10 py-1.5 text-xs font-semibold rounded-full border-none appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary ${STATUS_COLORS[lead.status] || 'bg-gray-100'}`}
-                      >
-                        <option value="new">New</option>
-                        <option value="contacted">Contacted</option>
-                        <option value="meeting">Meeting</option>
-                        <option value="closed">Closed</option>
-                        <option value="lost">Lost</option>
-                      </select>
-                      <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2">
-                        <ChevronDown size={12} className="opacity-50" />
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {new Date(lead.created_at).toLocaleDateString()}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                    <button className="text-primary hover:text-indigo-900">Details</button>
-                  </td>
+          <div className="table-container">
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Channel</th>
+                  <th>Name</th>
+                  <th>Phone</th>
+                  <th>Topic</th>
+                  <th>Status</th>
+                  <th>Created</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-          {filteredLeads.length === 0 && (
-             <div className="p-12 text-center text-gray-400">No leads found.</div>
-          )}
-        </div>
+              </thead>
+              <tbody>
+                {leads.length > 0 ? (
+                  leads.map((lead) => (
+                    <tr key={lead.id}>
+                      <td>
+                        <span className="badge" style={{
+                          backgroundColor: lead.channel === 'telegram' ? 'rgba(0, 136, 204, 0.1)' : 'rgba(228, 64, 95, 0.1)',
+                          color: lead.channel === 'telegram' ? '#0088cc' : '#E4405F'
+                        }}>
+                          {lead.channel === 'telegram' ? (
+                            <MessageCircle size={14} />
+                          ) : (
+                            <Instagram size={14} />
+                          )}
+                          <span style={{ marginLeft: '0.25rem' }}>
+                            {lead.channel === 'telegram' ? 'TG' : 'IG'}
+                          </span>
+                        </span>
+                      </td>
+                      <td style={{ fontWeight: 500 }}>
+                        {lead.full_name || 'N/A'}
+                      </td>
+                      <td style={{ fontFamily: 'monospace', fontSize: '0.8125rem' }}>
+                        {lead.phone || 'N/A'}
+                      </td>
+                      <td style={{
+                        maxWidth: '300px',
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis'
+                      }}>
+                        {lead.topic || 'N/A'}
+                      </td>
+                      <td>
+                        <select
+                          value={lead.status}
+                          onChange={(e) => updateStatus(lead.id, e.target.value as LeadStatus)}
+                          className="form-select"
+                          style={{
+                            padding: '0.375rem 0.75rem',
+                            fontSize: '0.8125rem',
+                            fontWeight: 600,
+                            color: getStatusColor(lead.status),
+                            border: `2px solid ${getStatusColor(lead.status)}`,
+                            borderRadius: '0.375rem'
+                          }}
+                        >
+                          {STATUS_OPTIONS.map(option => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                      </td>
+                      <td style={{ fontSize: '0.8125rem' }}>
+                        {new Date(lead.created_at).toLocaleDateString()}
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={6} style={{ textAlign: 'center', padding: '3rem' }}>
+                      <UsersIcon size={48} style={{ color: 'var(--color-text-tertiary)', margin: '0 auto 1rem', opacity: 0.5 }} />
+                      <p style={{ color: 'var(--color-text-secondary)' }}>
+                        {filter === 'all' ? 'No leads yet' : `No ${getStatusLabel(filter as LeadStatus).toLowerCase()} leads`}
+                      </p>
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
     </div>

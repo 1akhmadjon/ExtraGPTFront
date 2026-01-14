@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import { Lock, User as UserIcon } from 'lucide-react';
+import { Lock, User as UserIcon, AlertCircle } from 'lucide-react';
 
 const LoginPage = () => {
   const { login } = useAuth();
@@ -16,79 +16,179 @@ const LoginPage = () => {
     setLoading(true);
 
     try {
-      // Create FormData as expected by OAuth2 password flow usually, 
-      // or JSON depending on backend. Prompt implies standard login.
-      // Assuming JSON for simplicity based on prompt description, 
-      // but if it's OAuth2 form-data, we'd use new FormData().
-      // For this example, we'll send JSON.
       await login(formData);
       navigate('/');
-    } catch (err) {
-      setError('Invalid username or password');
+    } catch (err: any) {
+      const message = err.response?.data?.detail || 'Invalid username or password';
+      setError(typeof message === 'string' ? message : 'Invalid credentials');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
-      <div className="max-w-md w-full bg-white rounded-2xl shadow-xl overflow-hidden">
-        <div className="bg-primary p-8 text-center">
-          <h1 className="text-3xl font-bold text-white mb-2">EXTRAGPT</h1>
-          <p className="text-indigo-100">Sign in to your dashboard</p>
+    <div style={{
+      minHeight: '100vh',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: '1rem',
+      backgroundColor: 'var(--color-bg-secondary)'
+    }}>
+      <div style={{
+        width: '100%',
+        maxWidth: '28rem',
+        backgroundColor: 'var(--color-card)',
+        borderRadius: '1rem',
+        boxShadow: 'var(--shadow-xl)',
+        overflow: 'hidden',
+        border: '1px solid var(--color-border)'
+      }}>
+        {/* Header */}
+        <div style={{
+          background: 'linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%)',
+          padding: '2rem',
+          textAlign: 'center'
+        }}>
+          <h1 style={{
+            fontSize: '2rem',
+            fontWeight: 700,
+            color: 'white',
+            marginBottom: '0.5rem'
+          }}>
+            EXTRAGPT
+          </h1>
+          <p style={{
+            color: 'rgba(255, 255, 255, 0.9)',
+            fontSize: '0.875rem'
+          }}>
+            AI-Powered Customer Communication Platform
+          </p>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-8 space-y-6">
+        {/* Form */}
+        <form onSubmit={handleSubmit} style={{
+          padding: '2rem'
+        }}>
+          <div style={{ marginBottom: '1.5rem' }}>
+            <h2 style={{
+              fontSize: '1.5rem',
+              fontWeight: 600,
+              color: 'var(--color-text-primary)',
+              marginBottom: '0.5rem'
+            }}>
+              Welcome Back
+            </h2>
+            <p style={{
+              fontSize: '0.875rem',
+              color: 'var(--color-text-secondary)'
+            }}>
+              Sign in to your account to continue
+            </p>
+          </div>
+
+          {/* Error Alert */}
           {error && (
-            <div className="bg-red-50 text-danger p-3 rounded-lg text-sm text-center">
-              {error}
+            <div className="alert alert-danger" style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.5rem',
+              marginBottom: '1.5rem'
+            }}>
+              <AlertCircle size={18} />
+              <span>{error}</span>
             </div>
           )}
 
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Username</label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <UserIcon size={18} className="text-gray-400" />
-                </div>
-                <input
-                  type="text"
-                  required
-                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all"
-                  placeholder="Enter your username"
-                  value={formData.username}
-                  onChange={(e) => setFormData({ ...formData, username: e.target.value })}
-                />
+          {/* Username Field */}
+          <div className="form-group">
+            <label className="form-label">Username</label>
+            <div style={{ position: 'relative' }}>
+              <div style={{
+                position: 'absolute',
+                left: '1rem',
+                top: '50%',
+                transform: 'translateY(-50%)',
+                color: 'var(--color-text-tertiary)',
+                pointerEvents: 'none'
+              }}>
+                <UserIcon size={18} />
               </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Lock size={18} className="text-gray-400" />
-                </div>
-                <input
-                  type="password"
-                  required
-                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all"
-                  placeholder="Enter your password"
-                  value={formData.password}
-                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                />
-              </div>
+              <input
+                type="text"
+                required
+                className="form-input"
+                placeholder="Enter your username"
+                value={formData.username}
+                onChange={(e) => setFormData({ ...formData, username: e.target.value })}
+                style={{ paddingLeft: '2.75rem' }}
+              />
             </div>
           </div>
 
+          {/* Password Field */}
+          <div className="form-group">
+            <label className="form-label">Password</label>
+            <div style={{ position: 'relative' }}>
+              <div style={{
+                position: 'absolute',
+                left: '1rem',
+                top: '50%',
+                transform: 'translateY(-50%)',
+                color: 'var(--color-text-tertiary)',
+                pointerEvents: 'none'
+              }}>
+                <Lock size={18} />
+              </div>
+              <input
+                type="password"
+                required
+                className="form-input"
+                placeholder="Enter your password"
+                value={formData.password}
+                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                style={{ paddingLeft: '2.75rem' }}
+              />
+            </div>
+          </div>
+
+          {/* Submit Button */}
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-primary text-white py-3 rounded-lg font-semibold hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="btn btn-primary"
+            style={{
+              width: '100%',
+              padding: '0.75rem',
+              fontSize: '1rem',
+              marginTop: '0.5rem'
+            }}
           >
-            {loading ? 'Signing in...' : 'Sign In'}
+            {loading ? (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
+                <div className="loading-spinner" />
+                <span>Signing in...</span>
+              </div>
+            ) : (
+              'Sign In'
+            )}
           </button>
         </form>
+
+        {/* Footer */}
+        <div style={{
+          padding: '1.5rem 2rem',
+          backgroundColor: 'var(--color-bg-tertiary)',
+          borderTop: '1px solid var(--color-border)',
+          textAlign: 'center'
+        }}>
+          <p style={{
+            fontSize: '0.75rem',
+            color: 'var(--color-text-tertiary)'
+          }}>
+            © 2026 EXTRAGPT. Multi-tenant AI CRM Platform.
+          </p>
+        </div>
       </div>
     </div>
   );

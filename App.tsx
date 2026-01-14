@@ -1,6 +1,7 @@
 import React from 'react';
 import { HashRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { ThemeProvider } from './context/ThemeContext';
 import Layout from './components/Layout';
 import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
@@ -30,36 +31,38 @@ const ProtectedRoute = ({ children, allowedRoles }: { children: React.ReactNode,
 
 const App = () => {
   return (
-    <AuthProvider>
-      <Router>
-        <Routes>
-          <Route path="/login" element={<LoginPage />} />
-          
-          <Route path="/" element={
-            <ProtectedRoute>
-              <Layout />
-            </ProtectedRoute>
-          }>
-            <Route index element={<DashboardPage />} />
-            <Route path="chat" element={<ChatPage />} />
-            <Route path="leads" element={<LeadsPage />} />
-            <Route path="profile" element={<div className="p-8">Settings Page Placeholder</div>} />
-            
-            <Route path="bot-config" element={
-              <ProtectedRoute allowedRoles={['owner', 'admin']}>
-                <BotConfigPage />
+    <ThemeProvider>
+      <AuthProvider>
+        <Router>
+          <Routes>
+            <Route path="/login" element={<LoginPage />} />
+
+            <Route path="/" element={
+              <ProtectedRoute>
+                <Layout />
               </ProtectedRoute>
-            } />
-            
-            <Route path="admin" element={
-              <ProtectedRoute allowedRoles={['admin']}>
-                <AdminPage />
-              </ProtectedRoute>
-            } />
-          </Route>
-        </Routes>
-      </Router>
-    </AuthProvider>
+            }>
+              <Route index element={<DashboardPage />} />
+              <Route path="chat" element={<ChatPage />} />
+              <Route path="leads" element={<LeadsPage />} />
+              <Route path="profile" element={<div className="p-8">Settings Page Placeholder</div>} />
+
+              <Route path="bot-config" element={
+                <ProtectedRoute allowedRoles={['owner', 'admin']}>
+                  <BotConfigPage />
+                </ProtectedRoute>
+              } />
+
+              <Route path="admin" element={
+                <ProtectedRoute allowedRoles={['admin']}>
+                  <AdminPage />
+                </ProtectedRoute>
+              } />
+            </Route>
+          </Routes>
+        </Router>
+      </AuthProvider>
+    </ThemeProvider>
   );
 };
 

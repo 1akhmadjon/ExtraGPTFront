@@ -1,128 +1,338 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { useNavigate } from 'react-router-dom';
 import apiClient from '../api/client';
-import { DashboardStats } from '../types';
-import { MessageSquare, Users, AlertCircle, TrendingUp } from 'lucide-react';
+import { MessageSquare, Users, TrendingUp, Bot, Instagram, CheckCircle, Clock } from 'lucide-react';
 
-const StatCard = ({ title, value, icon: Icon, color }: any) => (
-  <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex items-start justify-between">
-    <div>
-      <p className="text-sm font-medium text-gray-500 mb-1">{title}</p>
-      <h3 className="text-2xl font-bold text-gray-900">{value}</h3>
-    </div>
-    <div className={`p-3 rounded-lg ${color}`}>
-      <Icon size={24} className="text-white" />
+interface DashboardData {
+  conversations: number;
+  ai_active: number;
+  telegram: number;
+  instagram: number;
+  leads: number;
+  need_to_call: number;
+}
+
+const StatCard = ({ title, value, icon: Icon, color, subtitle }: any) => (
+  <div className="card" style={{ padding: '1.5rem' }}>
+    <div style={{ display: 'flex', alignItems: 'start', justifyContent: 'space-between' }}>
+      <div style={{ flex: 1 }}>
+        <p style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)', marginBottom: '0.5rem' }}>
+          {title}
+        </p>
+        <h3 style={{ fontSize: '2rem', fontWeight: 700, color: 'var(--color-text-primary)', marginBottom: '0.25rem' }}>
+          {value}
+        </h3>
+        {subtitle && (
+          <p style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)' }}>
+            {subtitle}
+          </p>
+        )}
+      </div>
+      <div style={{
+        padding: '0.75rem',
+        borderRadius: '0.75rem',
+        backgroundColor: `${color}20`,
+        color: color
+      }}>
+        <Icon size={24} />
+      </div>
     </div>
   </div>
 );
 
 const DashboardPage = () => {
-  const { user } = useAuth();
-  const [stats, setStats] = useState<DashboardStats | null>(null);
+  const { user, businessId } = useAuth();
+  const navigate = useNavigate();
+  const [data, setData] = useState<DashboardData>({
+    conversations: 0,
+    ai_active: 0,
+    telegram: 0,
+    instagram: 0,
+    leads: 0,
+    need_to_call: 0,
+  });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const fetchStats = async () => {
-      try {
-        // Mocking endpoint as it's not explicitly in standard CRUD but implied
-        // In a real app, this would be GET /dashboard/stats or similar
-        // We will simulate it here or use available endpoints to count
-        
-        // Simulating API call delay and data
-        // const { data } = await apiClient.get('/dashboard/stats');
-        // setStats(data);
-        
-        // Mock data for display purposes
-        setTimeout(() => {
-          setStats({
-            total_conversations: 124,
-            unread_messages: 5,
-            leads_this_week: 12,
-            active_businesses: user?.role === 'admin' ? 3 : undefined
-          });
-          setLoading(false);
-        }, 500);
+    fetchDashboardData();
+  }, [businessId]);
 
-      } catch (error) {
-        console.error("Failed to fetch stats", error);
-        setLoading(false);
-      }
-    };
+  const fetchDashboardData = async () => {
+    if (!businessId) {
+      setLoading(false);
+      return;
+    }
 
-    fetchStats();
-  }, [user]);
+    try {
+      // Fetch conversations
+      const conversationsRes = await apiClient.get('/chat/conversations', {
+        params: { business_id: businessId }
+      });
+      const conversations = conversationsRes.data.conversations || [];
+
+      // Fetch leads
+      const leadsRes = await apiClient.get('/leads', {
+        params: { business_id: businessId }
+      });
+      const leads = leadsRes.data.leads || [];
+      const leadStats = leadsRes.data.stats || {};
+
+      setData({
+        conversations: conversations.length,
+        ai_active: conversations.filter((c: any) => c.ai_enabled).length,
+        telegram: conversations.filter((c: any) => c.channel === 'telegram').length,
+        instagram: conversations.filter((c: any) => c.channel === 'instagram').length,
+        leads: leads.length,
+        need_to_call: leadStats.need_to_call || 0,
+      });
+    } catch (error) {
+      console.error('Failed to fetch dashboard data', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (!businessId && user?.role !== 'admin') {
+    return (
+      <div className="card" style={{ textAlign: 'center', padding: '3rem' }}>
+        <Users size={64} style={{ color: 'var(--color-text-tertiary)', margin: '0 auto 1rem', opacity: 0.5 }} />
+        <h2 style={{ fontSize: '1.5rem', fontWeight: 600, marginBottom: '0.5rem' }}>
+          No Business Assigned
+        </h2>
+        <p style={{ color: 'var(--color-text-secondary)', marginBottom: '1.5rem' }}>
+          Please contact your administrator to assign you to a business.
+        </p>
+      </div>
+    );
+  }
 
   if (loading) {
     return (
-      <div className="flex h-full items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+      <div style={{ display: 'flex', height: '60vh', alignItems: 'center', justifyContent: 'center' }}>
+        <div>
+          <div className="loading-spinner" style={{ margin: '0 auto 1rem' }} />
+          <p style={{ color: 'var(--color-text-tertiary)', textAlign: 'center' }}>
+            Loading dashboard...
+          </p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-8">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Welcome back, {user?.username}!</h1>
-        <p className="text-gray-500 mt-1">Here's what's happening with your business today.</p>
+    <div>
+      {/* Welcome Header */}
+      <div style={{ marginBottom: '2rem' }}>
+        <h1 style={{ fontSize: '1.875rem', fontWeight: 700, marginBottom: '0.5rem' }}>
+          Welcome back, {user?.username}! 👋
+        </h1>
+        <p style={{ color: 'var(--color-text-secondary)' }}>
+          Here's what's happening with your business today.
+        </p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <StatCard 
-          title="Total Conversations" 
-          value={stats?.total_conversations || 0} 
-          icon={MessageSquare} 
-          color="bg-blue-500" 
+      {/* Stats Grid */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
+        gap: '1.5rem',
+        marginBottom: '2rem'
+      }}>
+        <StatCard
+          title="Total Conversations"
+          value={data.conversations}
+          icon={MessageSquare}
+          color="var(--color-primary)"
+          subtitle="Active chats"
         />
-        <StatCard 
-          title="Unread Messages" 
-          value={stats?.unread_messages || 0} 
-          icon={AlertCircle} 
-          color="bg-warning" 
+        <StatCard
+          title="AI Active"
+          value={data.ai_active}
+          icon={Bot}
+          color="var(--color-info)"
+          subtitle={`${data.conversations - data.ai_active} manual`}
         />
-        <StatCard 
-          title="Leads This Week" 
-          value={stats?.leads_this_week || 0} 
-          icon={TrendingUp} 
-          color="bg-success" 
+        <StatCard
+          title="Total Leads"
+          value={data.leads}
+          icon={TrendingUp}
+          color="var(--color-success)"
+          subtitle="All time"
         />
-        {user?.role === 'admin' && (
-           <StatCard 
-           title="Active Businesses" 
-           value={stats?.active_businesses || 0} 
-           icon={Users} 
-           color="bg-purple-500" 
-         />
-        )}
+        <StatCard
+          title="Need to Call"
+          value={data.need_to_call}
+          icon={Clock}
+          color="var(--color-danger)"
+          subtitle="Urgent leads"
+        />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* Placeholder for Recent Activity */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-          <h2 className="text-lg font-bold text-gray-900 mb-4">Recent Activity</h2>
-          <div className="space-y-4">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="flex items-center space-x-3 text-sm">
-                <div className="w-2 h-2 rounded-full bg-primary"></div>
-                <span className="text-gray-600">New lead generated from Instagram conversation.</span>
-                <span className="text-gray-400 text-xs ml-auto">2h ago</span>
+      {/* Channels & Quick Actions Grid */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
+        gap: '1.5rem'
+      }}>
+        {/* Channel Distribution */}
+        <div className="card">
+          <h2 className="card-title">Channel Distribution</h2>
+          <div style={{ marginTop: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '1rem',
+              backgroundColor: 'var(--color-bg-tertiary)',
+              borderRadius: '0.5rem'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                <div style={{
+                  padding: '0.5rem',
+                  backgroundColor: 'rgba(0, 136, 204, 0.1)',
+                  borderRadius: '0.5rem',
+                  color: '#0088cc'
+                }}>
+                  <MessageSquare size={20} />
+                </div>
+                <div>
+                  <p style={{ fontWeight: 600, color: 'var(--color-text-primary)' }}>Telegram</p>
+                  <p style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)' }}>Instant messaging</p>
+                </div>
               </div>
-            ))}
+              <div style={{ textAlign: 'right' }}>
+                <p style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--color-text-primary)' }}>
+                  {data.telegram}
+                </p>
+                <p style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)' }}>
+                  conversations
+                </p>
+              </div>
+            </div>
+
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '1rem',
+              backgroundColor: 'var(--color-bg-tertiary)',
+              borderRadius: '0.5rem'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                <div style={{
+                  padding: '0.5rem',
+                  backgroundColor: 'rgba(228, 64, 95, 0.1)',
+                  borderRadius: '0.5rem',
+                  color: '#E4405F'
+                }}>
+                  <Instagram size={20} />
+                </div>
+                <div>
+                  <p style={{ fontWeight: 600, color: 'var(--color-text-primary)' }}>Instagram</p>
+                  <p style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)' }}>Direct messages</p>
+                </div>
+              </div>
+              <div style={{ textAlign: 'right' }}>
+                <p style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--color-text-primary)' }}>
+                  {data.instagram}
+                </p>
+                <p style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)' }}>
+                  conversations
+                </p>
+              </div>
+            </div>
           </div>
         </div>
 
         {/* Quick Actions */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-          <h2 className="text-lg font-bold text-gray-900 mb-4">Quick Actions</h2>
-          <div className="grid grid-cols-2 gap-4">
-            <button className="p-4 rounded-lg bg-gray-50 hover:bg-gray-100 text-left transition-colors">
-              <span className="block font-medium text-gray-900">View Unread</span>
-              <span className="text-xs text-gray-500">Check pending messages</span>
+        <div className="card">
+          <h2 className="card-title">Quick Actions</h2>
+          <div style={{ marginTop: '1.5rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+            <button
+              onClick={() => navigate('/chat')}
+              className="btn"
+              style={{
+                width: '100%',
+                justifyContent: 'flex-start',
+                padding: '1rem',
+                backgroundColor: 'var(--color-bg-tertiary)',
+                color: 'var(--color-text-primary)'
+              }}
+            >
+              <MessageSquare size={20} />
+              <span style={{ flex: 1, textAlign: 'left' }}>View Conversations</span>
+              <span className="badge badge-primary">{data.conversations}</span>
             </button>
-            <button className="p-4 rounded-lg bg-gray-50 hover:bg-gray-100 text-left transition-colors">
-              <span className="block font-medium text-gray-900">Bot Settings</span>
-              <span className="text-xs text-gray-500">Configure AI responses</span>
+
+            <button
+              onClick={() => navigate('/leads')}
+              className="btn"
+              style={{
+                width: '100%',
+                justifyContent: 'flex-start',
+                padding: '1rem',
+                backgroundColor: 'var(--color-bg-tertiary)',
+                color: 'var(--color-text-primary)'
+              }}
+            >
+              <TrendingUp size={20} />
+              <span style={{ flex: 1, textAlign: 'left' }}>Manage Leads</span>
+              <span className="badge badge-danger">{data.need_to_call}</span>
             </button>
+
+            {(user?.role === 'owner' || user?.role === 'admin') && (
+              <button
+                onClick={() => navigate('/bot-config')}
+                className="btn"
+                style={{
+                  width: '100%',
+                  justifyContent: 'flex-start',
+                  padding: '1rem',
+                  backgroundColor: 'var(--color-bg-tertiary)',
+                  color: 'var(--color-text-primary)'
+                }}
+              >
+                <Bot size={20} />
+                <span style={{ flex: 1, textAlign: 'left' }}>Bot Configuration</span>
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* System Status */}
+        <div className="card" style={{ gridColumn: 'span 1' }}>
+          <h2 className="card-title">System Status</h2>
+          <div style={{ marginTop: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+              <CheckCircle size={20} style={{ color: 'var(--color-success)' }} />
+              <div>
+                <p style={{ fontWeight: 500, color: 'var(--color-text-primary)' }}>AI Service</p>
+                <p style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)' }}>
+                  {data.ai_active} conversations running
+                </p>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+              <CheckCircle size={20} style={{ color: 'var(--color-success)' }} />
+              <div>
+                <p style={{ fontWeight: 500, color: 'var(--color-text-primary)' }}>Telegram Bot</p>
+                <p style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)' }}>
+                  {data.telegram} active chats
+                </p>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+              <CheckCircle size={20} style={{ color: 'var(--color-success)' }} />
+              <div>
+                <p style={{ fontWeight: 500, color: 'var(--color-text-primary)' }}>Instagram</p>
+                <p style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)' }}>
+                  {data.instagram} active chats
+                </p>
+              </div>
+            </div>
           </div>
         </div>
       </div>

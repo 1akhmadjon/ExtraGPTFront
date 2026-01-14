@@ -1,0 +1,5 @@
+{
+  "name": "EXTRAGPT Frontend",
+  "description": "A multi-tenant AI-powered CRM platform for managing Telegram and Instagram conversations.",
+  "requestFramePermissions": []
+}

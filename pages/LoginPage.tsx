@@ -39,28 +39,43 @@ const LoginPage = () => {
         width: '100%',
         maxWidth: '28rem',
         backgroundColor: 'var(--color-card)',
-        borderRadius: '1rem',
+        borderRadius: '1.25rem',
         boxShadow: 'var(--shadow-xl)',
         overflow: 'hidden',
         border: '1px solid var(--color-border)'
       }}>
         {/* Header */}
         <div style={{
-          background: 'linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%)',
-          padding: '2rem',
-          textAlign: 'center'
+          background: 'var(--gradient-primary)',
+          padding: '2.5rem',
+          textAlign: 'center',
+          position: 'relative',
+          overflow: 'hidden'
         }}>
+          <div style={{
+            position: 'absolute',
+            inset: 0,
+            background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.15) 0%, rgba(255, 255, 255, 0) 100%)',
+            pointerEvents: 'none'
+          }} />
           <h1 style={{
-            fontSize: '2rem',
-            fontWeight: 700,
+            fontSize: '2.25rem',
+            fontWeight: 800,
             color: 'white',
-            marginBottom: '0.5rem'
+            marginBottom: '0.5rem',
+            letterSpacing: '-0.03em',
+            position: 'relative',
+            zIndex: 1,
+            fontFamily: 'Space Grotesk, Inter, sans-serif'
           }}>
             EXTRAGPT
           </h1>
           <p style={{
-            color: 'rgba(255, 255, 255, 0.9)',
-            fontSize: '0.875rem'
+            color: 'rgba(255, 255, 255, 0.95)',
+            fontSize: '0.9375rem',
+            position: 'relative',
+            zIndex: 1,
+            fontWeight: 500
           }}>
             AI-Powered Customer Communication Platform
           </p>
@@ -70,18 +85,21 @@ const LoginPage = () => {
         <form onSubmit={handleSubmit} style={{
           padding: '2rem'
         }}>
-          <div style={{ marginBottom: '1.5rem' }}>
+          <div style={{ marginBottom: '2rem' }}>
             <h2 style={{
-              fontSize: '1.5rem',
-              fontWeight: 600,
+              fontSize: '1.75rem',
+              fontWeight: 700,
               color: 'var(--color-text-primary)',
-              marginBottom: '0.5rem'
+              marginBottom: '0.5rem',
+              fontFamily: 'Space Grotesk, Inter, sans-serif',
+              letterSpacing: '-0.02em'
             }}>
               Welcome Back
             </h2>
             <p style={{
-              fontSize: '0.875rem',
-              color: 'var(--color-text-secondary)'
+              fontSize: '0.9375rem',
+              color: 'var(--color-text-secondary)',
+              lineHeight: 1.6
             }}>
               Sign in to your account to continue
             </p>
